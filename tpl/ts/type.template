@@ -1,0 +1,14 @@
+
+
+{{if ne .TableInfo.Comment "" }}//{{ .TableInfo.Comment }}{{end}}
+export interface I{{MysqlTableName2TsInterfaceName .TableInfo.Name}} {
+    {{range $index, $field := .ModelFields}}{{ Hump2JsonField $field.Field}}:{{MysqlFiled2TsType $field.Type}}; {{if ne $field.Comment "" }}//{{ $field.Comment }}{{end}}
+    {{end}}
+}
+
+export const new{{MysqlTableName2TsInterfaceName .TableInfo.Name}} = ():I{{MysqlTableName2TsInterfaceName .TableInfo.Name}} => {
+    return {
+        {{range $index, $field := .ModelFields}}{{ Hump2JsonField $field.Field}}:{{TsDefaultValue $field.Type }},
+        {{end}}
+    }
+}

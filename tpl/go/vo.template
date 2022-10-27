@@ -1,0 +1,7 @@
+package {{ .Package }}
+
+{{if ne .TableInfo.Comment "" }}//{{ .TableInfo.Comment }}{{end}}
+type {{ .ModelStructName}}Vo struct {
+    {{range $index, $field := .ModelFields}}{{ MysqlTableName2GolangStructName $field.Field}}   {{ MysqlFiled2GolangType $field.Type}}   `json:"{{ Hump2JsonField $field.Field}}"` {{if ne $field.Comment "" }}//{{ $field.Comment }}{{end}}
+{{end}}}
+

@@ -1,0 +1,136 @@
+package {{ .Package }}
+
+{{if .IsImportTime}}import ("time"
+    "errors"
+    "gorm.io/gorm"
+){{else}}import ("errors"
+    "gorm.io/gorm"
+    ){{end}}
+
+{{if ne .TableInfo.Comment "" }}//{{ .TableInfo.Comment }}{{end}}
+type {{ .ModelStructName}} struct {
+    {{range $index, $field := .ModelFields}}{{ if eq $field.Field "created_at"}}CreatedAt time.Time `json:"createdAt"` // 创建时间{{ else if eq $field.Field "updated_at" }}UpdatedAt time.Time `json:"updatedAt"` // 修改时间{{ else if eq $field.Field "deleted_at" }}DeletedAt gorm.DeletedAt `json:"deletedAt"` // 删除时间{{ else }}{{ MysqlTableName2GolangStructName $field.Field}}   {{ MysqlFiled2GolangType $field.Type}}   `json:"{{ Hump2JsonField $field.Field}}" gorm:"column:{{$field.Field}}{{if and $field.Key "PRI" }};primaryKey{{end}}{{if and $field.Key "NO" }};not null{{end}}"` {{if ne $field.Comment "" }}//{{ $field.Comment }}{{end}}{{end}}
+{{end}}}
+
+type {{ .ModelStructName}}Model interface {
+	Create(data *{{ .ModelStructName}}, ops ...Set{{ .ModelStructName}}WhereOption) (id {{ MysqlFiled2GolangType .IdType}}, err error)                                                    // 创建
+	UpdateById(id {{ MysqlFiled2GolangType .IdType}}, data {{ .ModelStructName}}, ops ...Set{{ .ModelStructName}}WhereOption) (err error)                                                 // 根据id修改
+	UpdateByCondition(data {{ .ModelStructName}}, ops ...Set{{ .ModelStructName}}WhereOption) (err error)                         // 根据条件map 批量修改
+	FindById(id {{ MysqlFiled2GolangType .IdType}}, ops ...Set{{ .ModelStructName}}WhereOption) (result {{ .ModelStructName}}, err error)                                                 // 根据id 查询
+	FindOneByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (result {{ .ModelStructName}}, err error)                      // 根据条件查询一个
+	FindByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (result []{{ .ModelStructName}}, err error)                       // 根据条件查询多个
+	FindCountByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (count int64, err error)                    // 查询符合条件的个数
+	FindByConditionWithPage(ops ...Set{{ .ModelStructName}}WhereOption) (result ResultPageData[{{ .ModelStructName}}], err error) // 根据条件分页查询
+}
+
+// Set{{ .ModelStructName}}WhereOption 设置查询条件
+type Set{{ .ModelStructName}}WhereOption func(o *WhereOption[{{ .ModelStructName}}])
+
+type {{FirstLower .ModelStructName}}Model struct {
+	db    *gorm.DB
+	table string
+}
+
+func New{{ .ModelStructName}}Model(db *gorm.DB) {{ .ModelStructName}}Model {
+	return &{{FirstLower .ModelStructName}}Model{
+		db:    db,
+		table: "{{.TableInfo.Name}}",
+	}
+}
+
+
+// 基础处理函数
+func {{FirstLower .ModelStructName}}ByConditionBase(m *{{FirstLower .ModelStructName}}Model, ops ...Set{{ .ModelStructName}}WhereOption) (tx *gorm.DB, whereOption *WhereOption[{{ .ModelStructName}}]) {
+    query := make(map[string]interface{})
+	whereOption = &WhereOption[{{ .ModelStructName}}]{
+		QueryMap: query,
+	}
+	for _, o := range ops {
+		o(whereOption)
+	}
+	tx = m.db.Table(m.table)
+	// 获取where条件
+	tx = getWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
+	return tx, whereOption
+}
+func (m *{{FirstLower .ModelStructName}}Model) Create(data *{{ .ModelStructName}},ops ...Set{{ .ModelStructName}}WhereOption) (id {{ MysqlFiled2GolangType .IdType}}, err error) {
+	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	err = tx.Table(m.table).Create(data).Error
+    return data.Id, err
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) UpdateById(id {{ MysqlFiled2GolangType .IdType}}, data {{ .ModelStructName}},ops ...Set{{ .ModelStructName}}WhereOption) (err error) {
+	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	return tx.Table(m.table).Where("id = ? ", id).Updates(data).Error
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) UpdateByCondition(data {{ .ModelStructName}}, ops ...Set{{ .ModelStructName}}WhereOption) (err error) {
+	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	return tx.Updates(data).Error
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) FindById(id {{ MysqlFiled2GolangType .IdType}}, ops ...Set{{ .ModelStructName}}WhereOption) (result {{ .ModelStructName}}, err error) {
+	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	err = tx.Table(m.table).First(&result, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+        return result, nil
+    }
+	return result, err
+}
+
+func find{{ .ModelStructName}}Base(m *{{FirstLower .ModelStructName}}Model, ops ...Set{{ .ModelStructName}}WhereOption) *gorm.DB {
+	tx, whereOption := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	if whereOption.Order != "" {
+		tx = tx.Order(whereOption.Order)
+	}
+	return tx
+}
+func (m *{{FirstLower .ModelStructName}}Model) FindOneByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (result {{ .ModelStructName}}, err error) {
+	err = find{{ .ModelStructName}}Base(m, ops...).First(&result).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+        return result, nil
+    }
+	return result, err
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) FindByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (result []{{ .ModelStructName}}, err error) {
+	err = find{{ .ModelStructName}}Base(m, ops...).Find(&result).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+        return result, nil
+    }
+	return result, err
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) FindCountByCondition(ops ...Set{{ .ModelStructName}}WhereOption) (count int64, err error) {
+	err = find{{ .ModelStructName}}Base(m, ops...).Count(&count).Error
+	return count, err
+}
+
+func (m *{{FirstLower .ModelStructName}}Model) FindByConditionWithPage(ops ...Set{{ .ModelStructName}}WhereOption) (result ResultPageData[{{ .ModelStructName}}], err error) {
+	query := make(map[string]interface{})
+	whereOption := &WhereOption[{{ .ModelStructName}}]{
+		PageNum:  1,
+		PageSize: 10,
+		QueryMap: query,
+	}
+	for _, o := range ops {
+		o(whereOption)
+	}
+	offsetVal := (whereOption.PageNum - 1) * whereOption.PageSize
+	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
+	// 获取where条件
+	tx = getWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
+	tx = getOrderByWhereOption[{{ .ModelStructName}}](tx, whereOption)
+	err = tx.Count(&result.Total).Offset(offsetVal).Limit(whereOption.PageSize).Find(&result.List).Error
+	if int64(whereOption.PageNum*whereOption.PageSize) >= result.Total {
+		result.NextPage = -1
+	} else {
+		result.NextPage = result.PageNum + 1
+	}
+	result.PageNum = whereOption.PageNum
+	result.PageSize = whereOption.PageSize
+    if errors.Is(err, gorm.ErrRecordNotFound) {
+        return result, nil
+    }
+	return result, err
+}

@@ -1,0 +1,145 @@
+package {{ .packageName}}
+
+import (
+	"fmt"
+	"gorm.io/gorm"
+	"reflect"
+	"strings"
+	"time"
+)
+
+type WhereOption[T any] struct {
+	PageNum    int                    `json:"pageNum"`    //页码
+	PageSize   int                    `json:"pageSize"`   //每页大小
+	Order      string                 `json:"order"`      //排序
+	QueryMap   map[string]interface{} `json:"query"`      //查询条件map
+	QueryEntry T                      `json:"queryEntry"` // 查询实体
+	Tx         *gorm.DB               `json:"tx"`         // 事务时使用
+}
+type ResultPageData[T any] struct {
+	List     []T   `json:"list"`
+	Total    int64 `json:"total"`
+	PageNum  int   `json:"pageNum"`
+	NextPage int   `json:"nextPage"`
+	PageSize int   `json:"pageSize"`
+}
+
+type Model struct {
+    CreatedAt time.Time
+    UpdatedAt time.Time
+    DeletedAt gorm.DeletedAt
+}
+
+func Struct2MapFieldName(obj interface{}) map[string]interface{} {
+	t := reflect.TypeOf(obj)
+	v := reflect.ValueOf(obj)
+	var data = make(map[string]interface{})
+	for i := 0; i < t.NumField(); i++ {
+		jsonKey := t.Field(i).Tag.Get("gorm")
+		jsonKey = strings.Split(jsonKey, ";")[0]
+		jsonKey = strings.Split(jsonKey, ":")[1]
+		if jsonKey != "-" {
+			data[jsonKey] = v.Field(i).Interface()
+		}
+	}
+	return data
+}
+
+// 检索条件 处理函数
+func getWhereStrByWhereOption[T any](tx *gorm.DB, whereOption *WhereOption[T]) *gorm.DB {
+
+	// 判断结构体是否有值
+	if &whereOption.QueryEntry != nil {
+		tx = tx.Where(whereOption.QueryEntry)
+	}
+	if len(whereOption.QueryMap) > 0 {
+		m := whereOption.QueryMap
+		whereSql, values := mapCondition2whereSql(m)
+		tx = tx.Where(whereSql, values...)
+	}
+
+	return tx
+}
+
+// 处理 排序
+func getOrderByWhereOption[T any](tx *gorm.DB, whereOption *WhereOption[T]) *gorm.DB {
+	if whereOption.Order != "" {
+		tx = tx.Order(whereOption.Order)
+	}
+	return tx
+}
+
+// map条件转whereSql
+func mapCondition2whereSql(m map[string]interface{}) (whereSql string, values []interface{}) {
+	for key, value := range m {
+		conditionKey := strings.Split(key, " ")
+		KeyIndex := len(conditionKey)
+		if KeyIndex > 2 {
+			fmt.Println("map构建的条件格式不对，类似于`age >`(已舍弃)")
+			continue
+		}
+		if whereSql != "" {
+			whereSql += " AND "
+		}
+		switch KeyIndex {
+		case 1:
+			whereSql += fmt.Sprint(conditionKey[0], " = ?")
+			values = append(values, value)
+			break
+		case 2:
+			field := conditionKey[0]
+			switch conditionKey[1] {
+			case "=":
+				whereSql += fmt.Sprint(field, " = ?")
+				values = append(values, value)
+				break
+			case ">":
+				whereSql += fmt.Sprint(field, " > ?")
+				values = append(values, value)
+				break
+			case ">=":
+				whereSql += fmt.Sprint(field, " >= ?")
+				values = append(values, value)
+				break
+			case "<":
+				whereSql += fmt.Sprint(field, " < ?")
+				values = append(values, value)
+				break
+			case "<=":
+				whereSql += fmt.Sprint(field, " <= ?")
+				values = append(values, value)
+				break
+			case "in":
+				whereSql += fmt.Sprint(field, " in (?)")
+				values = append(values, value)
+				break
+			case "like":
+				whereSql += fmt.Sprint(field, " like ?")
+				values = append(values, value)
+				break
+			case "<>":
+				whereSql += fmt.Sprint(field, " != ?")
+				values = append(values, value)
+				break
+			case "!=":
+				whereSql += fmt.Sprint(field, " != ?")
+				values = append(values, value)
+				break
+			}
+			break
+		}
+	}
+	return
+}
+
+// 丢弃不属于该表字段 mapKey 避免报错
+func filterUserMapKey(m map[string]interface{}, fields []string) map[string]interface{} {
+	newMap := make(map[string]interface{})
+	for _, field := range fields {
+		if v, ok := m[field]; ok {
+			// 存在
+			newMap[field] = v
+		}
+	}
+	return newMap
+}

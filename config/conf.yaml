@@ -1,0 +1,22 @@
+Mysql:
+  #数据库配置
+  Host: your host
+  Port: 3306
+  User: your user
+  Password: your pwd
+  DBName: your db
+
+ModelFile:
+  #存储路径
+  ModelPath: "./generateFile/model/"
+  VoPath: "./generateFile/vo/"
+  TypePath: "./generateFile/types/"
+  #是否强制覆盖原文件
+  IsCover: false
+  #package名
+  PackageName: "model"
+  #需要生成model的表名，支持多个，支持全库扫描（不输入任何参数）
+  TableName:
+
+
+
