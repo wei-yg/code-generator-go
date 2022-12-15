@@ -50,7 +50,7 @@ func {{FirstLower .ModelStructName}}ByConditionBase(m *{{FirstLower .ModelStruct
 	}
 	tx = m.db.Table(m.table)
 	// 获取where条件
-	tx = GetWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
+	tx = getWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
 	return tx, whereOption
 }
 func (m *{{FirstLower .ModelStructName}}Model) Create(data *{{ .ModelStructName}},ops ...Set{{ .ModelStructName}}WhereOption) (id {{ MysqlFiled2GolangType .IdType}}, err error) {
@@ -119,7 +119,7 @@ func (m *{{FirstLower .ModelStructName}}Model) FindByConditionWithPage(ops ...Se
 	offsetVal := (whereOption.PageNum - 1) * whereOption.PageSize
 	tx, _ := {{FirstLower .ModelStructName}}ByConditionBase(m, ops...)
 	// 获取where条件
-	tx = GetWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
+	tx = getWhereStrByWhereOption[{{ .ModelStructName}}](tx, whereOption)
 	tx = GetOrderByWhereOption[{{ .ModelStructName}}](tx, whereOption)
 	err = tx.Count(&result.Total).Offset(offsetVal).Limit(whereOption.PageSize).Find(&result.List).Error
 	if int64(whereOption.PageNum*whereOption.PageSize) >= result.Total {
